@@ -1,0 +1,49 @@
+apply plugin: 'application'
+
+archivesBaseName = 'JavaBlend-SDK'
+mainClassName = 'org.cakelab.blender.generator.ModelGenerator'
+
+sourceSets.main {
+    java.srcDirs = ['src']
+    resources.srcDirs = ['resources']
+}
+
+allprojects {
+    apply plugin: 'java'
+
+    group = 'org.cakelab.blender'
+    version = '1.1.1'
+
+    repositories {
+        maven {
+            name 'jitpack'
+            url 'https://jitpack.io/'
+        }
+    }
+
+    dependencies {
+        compile 'com.github.ReplayMod:jdoxml:bf3a047'
+        compile 'com.github.ReplayMod:org.cakelab.json:dc46f55'
+    }
+}
+
+subprojects { project ->
+    apply plugin: 'maven'
+
+    def srcDir = project.file('build/generated')
+    sourceSets.main.java.srcDirs = [srcDir, project.parent.file('src')]
+
+    task generateSources(type: JavaExec) {
+        def blendFile = project.parent.file('versions').listFiles().find { it.name.startsWith(project.name) }
+        inputs.file blendFile
+        outputs.dir srcDir
+
+        classpath = project.parent.sourceSets.main.runtimeClasspath
+        main = project.parent.mainClassName
+        args '-in', blendFile.absolutePath,
+             '-out', srcDir.absolutePath,
+             '-p', 'org.blender',
+             '-d', 'false'
+    }
+    compileJava.dependsOn generateSources
+}

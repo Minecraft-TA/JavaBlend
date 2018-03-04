@@ -1,0 +1,2 @@
+def versions = file('versions').list().collect { it.substring(0, it.indexOf('-')) }
+versions.each { include it }
