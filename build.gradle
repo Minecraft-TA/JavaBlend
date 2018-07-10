@@ -32,6 +32,10 @@ subprojects { project ->
 
     def srcDir = project.file('build/generated')
     sourceSets.main.java.srcDirs = [srcDir, project.parent.file('src')]
+    sourceSets.main.resources {
+        srcDirs = [srcDir]
+        excludes = ["**/*.java"]
+    }
 
     task generateSources(type: JavaExec) {
         def blendFile = project.parent.file('versions').listFiles().find { it.name.startsWith(project.name) }
