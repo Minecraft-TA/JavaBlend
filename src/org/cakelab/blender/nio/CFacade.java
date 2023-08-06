@@ -7,9 +7,8 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.ByteOrder;
 
-import org.cakelab.blender.io.Encoding;
-import org.cakelab.blender.io.block.Block;
-import org.cakelab.blender.io.block.BlockTable;
+import org.cakelab.blender.io.*;
+import org.cakelab.blender.io.block.*;
 
 /**
  * {@link CFacade} is the base class of all complex types
@@ -74,18 +73,18 @@ public abstract class CFacade {
 	 * DNA struct, a pointer or an array.
 	 * <h3>Preconditions:</h3>
 	 * <ul>
-	 * <li>There must exist a block in the __blockTable which is assigned
-	 * to the given __address</li>
+	 * <li>There must exist a block in the blockTable which is assigned
+	 * to the given address</li>
 	 * </ul>
-	 * @param __address Start address of the instance.
-	 * @param __block The block which contains the address.
-	 * @param __blockTable Block table, which contains the block.
+	 * @param address Start address of the instance.
+	 * @param block The block which contains the address.
+	 * @param blockTable Block table, which contains the block.
 	 */
-	protected CFacade(long __address, Block block, BlockTable __blockTable) {
-		this.__io__address = __address;
+	protected CFacade(long address, Block block, BlockTable blockTable) {
+		this.__io__address = address;
 		this.__io__block = block;
-		this.__io__blockTable = __blockTable;
-		this.__io__pointersize = __blockTable.getEncoding().getAddressWidth();
+		this.__io__blockTable = blockTable;
+		this.__io__pointersize = blockTable.getEncoding().getAddressWidth();
 		this.__io__arch_index = __io__pointersize == Encoding.ADDR_WIDTH_32BIT ? 0 : 1;
 	}
 	
@@ -114,50 +113,52 @@ public abstract class CFacade {
 	 * to the given Java type according to the type mapping of Java Blend.
 	 * The method uses the architecture specifications (i.e. pointer size)
 	 * associated with the block of the instance, this method was called on.
-	 * @param type The type which size is requested.
+	 * @param ctype The type which size is requested. Any kind of type 
+	 * representing a C data type, such as any of the sub-classes 
+	 * of CFacade, a CArrayFacade, CPointer or any of the primitive types (long, int, char ...).
 	 * @return sizeof(ctype)
 	 */
-	public long __io__sizeof(Class<?> type) {
-		return __io__sizeof(type, __io__pointersize);
+	public long __io__sizeof(Class<?> ctype) {
+		return __io__sizeof(ctype, __io__pointersize);
 	}
 
 	/**
 	 * This method returns the size of the C type which corresponds
 	 * to the given Java type according to the type mapping of Java Blend.
-	 * @param type 
-	 * @param addressWith Size of a pointer in bytes, based on architecture specifications (i.e. 4/8 bytes)
+	 * @param ctype Any kind of type representing a C data type, such as any of the sub-classes of CFacade, a CArrayFacade, CPointer or any of the primitive types (long, int, char ...).
+	 * @param addressWidth Size of a pointer in bytes, based on architecture specifications (i.e. 4/8 bytes)
 	 * @return sizeof(ctype)
 	 */
-	public static long __io__sizeof(Class<?> type, int addressWidth) {
-		if (type.equals(CPointer.class)) {
+	public static long __io__sizeof(Class<?> ctype, int addressWidth) {
+		if (ctype.equals(CPointer.class)) {
 			return addressWidth;
-		} else if (type.equals(CArrayFacade.class)) {
+		} else if (ctype.equals(CArrayFacade.class)) {
 			throw new IllegalArgumentException("no generic runtime type information for array types available");
-		} else if (__io__subclassof(type, CFacade.class)){
-			CMetaData typeInfo = type.getAnnotation(CMetaData.class);
+		} else if (__io__subclassof(ctype, CFacade.class)){
+			CMetaData typeInfo = ctype.getAnnotation(CMetaData.class);
 			return addressWidth == 8 ? typeInfo.size64() : typeInfo.size32();
-		} else if (type.equals(byte.class) || type.equals(Byte.class)) {
+		} else if (ctype.equals(byte.class) || ctype.equals(Byte.class)) {
 			return 1;
-		} else if (type.equals(short.class) || type.equals(Short.class)) {
+		} else if (ctype.equals(short.class) || ctype.equals(Short.class)) {
 			return 2;
-		} else if (type.equals(int.class) || type.equals(Integer.class)) {
+		} else if (ctype.equals(int.class) || ctype.equals(Integer.class)) {
 			return 4;
-		} else if (type.equals(long.class) || type.equals(Long.class)) {
+		} else if (ctype.equals(long.class) || ctype.equals(Long.class)) {
 			return addressWidth;
-		} else if (type.equals(int64.class)) {
+		} else if (ctype.equals(int64.class)) {
 			return 8;
-		} else if (type.equals(float.class) || type.equals(Float.class)) {
+		} else if (ctype.equals(float.class) || ctype.equals(Float.class)) {
 			return 4;
-		} else if (type.equals(double.class) || type.equals(Double.class)) {
+		} else if (ctype.equals(double.class) || ctype.equals(Double.class)) {
 			return 8;
-		} else if (type.equals(Object.class)) {
+		} else if (ctype.equals(Object.class)) {
 			/* 
 			 * special case: this type of pointer cannot support pointer 
 			 * arithmetics, same way as in C.
 			 */
 			return 0;
 		} else {
-			throw new IllegalArgumentException("missing size information for type '" + type.getSimpleName() + "'");
+			throw new IllegalArgumentException("missing size information for type '" + ctype.getSimpleName() + "'");
 		}
 	}
 
@@ -172,21 +173,24 @@ public abstract class CFacade {
 
 	/**
 	 * This method creates a void pointer on the field identified by 
-	 * 'fieldDescriptor' of the struct represented by the facade (see static fields __DNA__FIELD__&lt;fieldname&gt; in the generated facades).
-	 * <p>The returned pointer has to be casted (by means of {@link CPointer#cast(Class)} and similar methods)
+	 * 'fieldDescriptor' of the struct represented by the facade 
+	 * (see static fields __DNA__FIELD__&lt;fieldname&gt; in the facades).
+	 * <p>The returned pointer has to be casted (by means of {@link CPointer#cast(Class)} 
+	 * and similar methods)
 	 * in order to use pointer arithmetics on it. We had the choice 
 	 * here to either carry all type information for every field over
 	 * to the runtime model (and waste a lot of performance) or deal 
 	 * with the risk of having void pointers. Since it is very rare
 	 * that pointers on fields are needed, we decided to go with this approach.
 	 * </p>
+	 * <p>
 	 * <b>This method is highly dangerous</b> because we do not check,
 	 * whether the field descriptor actually belongs to the facade and it is
 	 * directly interpreted as offset to the structs base address.
 	 * </p>
 	 * @param fieldDescriptor The __DNA__FIELD__&lt;fieldname&gt; descriptor 
-	 *        of the field, whos address will be determined.
-	 * @return
+	 *        of the field, who's address will be determined.
+	 * @return Pointer on requested field.
 	 */
 	public CPointer<Object> __io__addressof(long[] fieldDescriptor) {
 		return new CPointer<Object>(this.__io__address + fieldDescriptor[__io__arch_index], new Class[]{Object.class}, this.__io__block, this.__io__blockTable);
@@ -209,11 +213,7 @@ public abstract class CFacade {
 	}
 
 	/**
-	 * Tests whether the given object is an instance of class clazz
-	 * or some subclass of class clazz.
-	 * @param type type to be tested.
-	 * @param superType expected base class of the given type.
-	 * @return true if true.
+	 * Tests whether the given object is an instance or some subclass of class clazz.
 	 */
 	public static boolean __io__instanceof(CFacade object, Class<?> clazz) {
 		Class<?> testClass = object.getClass();
@@ -246,8 +246,32 @@ public abstract class CFacade {
 		return (CFacade) constructor.newInstance(address, block, blockTable);
 	}
 
+	
+	
+	@Override
+	public int hashCode() {
+		// considers the address only.
+		// Rare case of having objects of different blender files in 
+		// the same hash-organised data structure,
+		// is still supported this way.
+		return Long.hashCode(__io__address);
+	}
+
+
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj)
+			return true;
+		if (obj == null)
+			return false;
+		if (getClass() != obj.getClass())
+			return false;
+		CFacade other = (CFacade) obj;
+		return __io__equals(other, other.__io__address);
+	}
+
 	/**
-	 * Tests whether the facade, this method was called on, references the given address in the same file as the given facade.
+	 * Tests whether the facade references the given address in the same file as the given facade.
 	 * @param facade
 	 * @param address 
 	 * @return address (virtual) of the object, wrapped by the given facade.
@@ -304,7 +328,6 @@ public abstract class CFacade {
 	 * 
 	 * 
 	 * @param source An object derived from CFacade or CArrayFacade, but not CPointer. 
-	 * @param nla_tracks 
 	 * @throws IOException
 	 */
 	protected void __io__generic__copy (CFacade source) throws IOException {
@@ -332,7 +355,7 @@ public abstract class CFacade {
 	 * @param target Facade, which gets its data overriden with the values of source.
 	 * @param source Facade, which data gets copied to target.
 	 * @throws IOException
-	 * @see {@link #__io__generic__copy(CFacade)}
+	 * @see #__io__generic__copy(CFacade)
 	 */
 	protected static void __io__generic__copy (CFacade target, CFacade source) throws IOException {
 		target.__io__generic__copy(source);
@@ -342,10 +365,6 @@ public abstract class CFacade {
 	/**
 	 * Tests whether the underlying data blocks of both facades use the
 	 * same encoding (byte order and address length).
-	 * 
-	 * @param facadeA
-	 * @param facadeB
-	 * @return
 	 */
 	protected boolean __io__same__encoding(CFacade facadeA, CFacade facadeB) {
 		return facadeA.__io__pointersize == facadeB.__io__pointersize

@@ -1,6 +1,6 @@
 package org.cakelab.blender.utils;
 
-import static org.cakelab.blender.generator.CFacadeMembers.__DNA__SDNA_INDEX;
+import static org.cakelab.blender.typemap.CFacadeMembers.__DNA__SDNA_INDEX;
 
 import java.io.File;
 import java.io.IOException;
@@ -26,7 +26,7 @@ import org.cakelab.blender.nio.CPointer;
  * <p>
  * Factory classes are part of the utils package and optional. This base class 
  * contains the public factory methods to create blocks for facades, arrays and 
- * pointers. It also contains utilities to create a new blender files in a
+ * pointers. It also contains utilities to create new blender files in a
  * derived factory class.
  * </p>
  * 
@@ -34,6 +34,8 @@ import org.cakelab.blender.nio.CPointer;
  *
  */
 public class BlenderFactoryBase {
+	
+	/** base class to be used by a derived factory class to create new blender files. */
 	protected static class BlenderFileImplBase extends BlenderFile {
 
 		protected BlenderFileImplBase(File file, StructDNA sdna, int blenderVersion) throws IOException {
@@ -123,12 +125,6 @@ public class BlenderFactoryBase {
 	 * BlenderFile blend = BlenderFactory.newBlenderFile(new File("my.blend"));
 	 * Scene scene = BlenderFactory.newDNAStructBlock(BlockCodes.CODE_SCE, Scene.class, blend);
 	 * </pre>
-	 * 
-	 * @param blockCode
-	 * @param facetClass
-	 * @param blend
-	 * @return
-	 * @throws IOException
 	 */
 	@SuppressWarnings("unchecked")
 	public static <T extends CFacade> T newCStructBlock(Identifier blockCode, Class<T> facetClass, BlenderFile blend) throws IOException {
@@ -165,14 +161,6 @@ public class BlenderFactoryBase {
 	 * BlenderFile blend = BlenderFactory.newBlenderFile(new File("my.blend"));
 	 * CArrayFacade&lt;Scene&gt; scene = BlenderFactory.newDNAStructBlock(BlockCodes.CODE_SCE, Scene.class, 2, blend);
 	 * </pre>
-	 * 
-	 * 
-	 * @param blockCode
-	 * @param facetClass
-	 * @param count
-	 * @param blend
-	 * @return
-	 * @throws IOException
 	 */
 	public static <T extends CFacade> CArrayFacade<T> newCStructBlock(Identifier blockCode, Class<T> facetClass, int count, BlenderFile blend) throws IOException {
 		BlockTable blockTable = blend.getBlockTable();
@@ -260,8 +248,6 @@ public class BlenderFactoryBase {
 	 * @param typeList type specification for all referenced types
 	 * @param dimensions length of each array dimension
 	 * @param blend blender file to add block to.
-	 * @return
-	 * @throws IOException
 	 */
 	public static <T> CArrayFacade<T> newCArrayBlock(Identifier blockCode, Class<?>[] typeList, int[] dimensions, BlenderFile blend) throws IOException {
 		BlockTable blockTable = blend.getBlockTable();
@@ -321,7 +307,6 @@ public class BlenderFactoryBase {
 	 * @param typeList type specification of the pointer.
 	 * @param count number of pointers to fit in block.
 	 * @param blend blender file to add block to.
-	 * @return
 	 * @throws IOException
 	 */
 	public static <T> CArrayFacade<CPointer<T>> newCPointerBlock(Identifier blockCode, Class<?>[] typeList, int count, BlenderFile blend) throws IOException {
@@ -352,8 +337,6 @@ public class BlenderFactoryBase {
 	 * model was generated from.
 	 * 
 	 * @param resourcePathTo_sdna_blend "your/package/name/utils/resources/sdna.blend"
-	 * @return 
-	 * @throws IOException
 	 */
 	protected static StructDNA createStructDNA(String resourcePathTo_sdna_blend) throws IOException {
 		InputStream in = BlenderFactoryBase.class.getClassLoader().getResourceAsStream(resourcePathTo_sdna_blend);

@@ -104,6 +104,10 @@ public class FileHeader {
 			code = major*100 + minor;
 		}
 
+		/** 
+		 * Creates string from major and minor number.
+		 * FORMAT: printf("%d.%02d)
+		 */
 		public String toString() {
 			return "" + major + '.' + (minor < 10 ? "0"+minor : minor);
 		}
@@ -137,7 +141,7 @@ public class FileHeader {
 	}
 	
 	/** File identifier (always "BLENDER" (ASCII)).*/
-	static final String BLENDER_MAGIC = "BLENDER";
+	public static final String BLENDER_MAGIC = "BLENDER";
 	/** Size of a pointer; all pointers in the file are stored in this 
 	 * format. '_' means 4 bytes or 32 bit and '-' means 
 	 * 8 bytes or 64 bits. */
@@ -180,5 +184,8 @@ public class FileHeader {
 	public int getPointerSize() {
 		return pointerSize.getSize();
 	}
-
+	/** Blender version, this file was created in. */
+	public Version getVersion() {
+		return version;
+	}
 }

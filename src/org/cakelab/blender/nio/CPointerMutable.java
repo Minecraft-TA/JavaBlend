@@ -72,10 +72,10 @@ public class CPointerMutable<T> extends CPointer<T> {
 	 * Value of the pointer will be changed in place.
 	 * 
 	 * @param increment
-	 * @return
+	 * @return same pointer instance with modified address
 	 */
 	public CPointerMutable<T> add(int increment) {
-		__io__address += targetSize;
+		__io__address += targetSize * increment;
 		return this;
 	}
 
@@ -108,7 +108,7 @@ public class CPointerMutable<T> extends CPointer<T> {
 	 * @throws IOException
 	 */
 	public CPointerMutable<T> plus(int value) throws IOException {
-		return new  CPointerMutable<T>(this, __io__address + targetSize);
+		return new  CPointerMutable<T>(this, __io__address + targetSize * value);
 	}
 
 	
@@ -139,7 +139,7 @@ public class CPointerMutable<T> extends CPointer<T> {
 	 * int* a = ..;
 	 * p = a;
 	 *</pre>
-	 * @param address
+	 * @param address new address
 	 * @throws IOException
 	 */
 	public void assign(CPointer<T> address) throws IOException {
@@ -148,7 +148,6 @@ public class CPointerMutable<T> extends CPointer<T> {
 
 	/**
 	 * Returns the value of the address.
-	 * @return
 	 */
 	public long value() {
 		return __io__address;
