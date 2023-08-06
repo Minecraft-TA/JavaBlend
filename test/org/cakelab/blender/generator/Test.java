@@ -19,12 +19,12 @@ public class Test {
 			"-in", input.getPath(),
 			"-out", output.getPath(),
 			"-p", javaPackage,
-			"-c", "../JavaBlendDocs/resources/dnadoc",
+			"-c", "../org.cakelab.blender.dnadoc/resources/dnadoc",
 			"-u", "true",
 			"-d", "true"
 		};
 		
-		ModelGenerator.main(args);
+		LibraryGenerator.main(args);
 		
 	}
 }

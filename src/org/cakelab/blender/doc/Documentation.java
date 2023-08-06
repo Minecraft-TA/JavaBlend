@@ -6,6 +6,8 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Map.Entry;
 
 import org.cakelab.blender.io.FileHeader.Version;
@@ -15,7 +17,8 @@ import org.cakelab.blender.io.dna.DNAStruct;
 import org.cakelab.json.JSONArray;
 import org.cakelab.json.JSONException;
 import org.cakelab.json.JSONObject;
-import org.cakelab.json.codec.Parser;
+import org.cakelab.json.JSONDefaults;
+import org.cakelab.json.parser.JSONParser;
 
 /**
  * <p>
@@ -31,12 +34,17 @@ import org.cakelab.json.codec.Parser;
  * of the data model, the class and method generators use this 
  * class to lookup available documentation for classes and its members.
  * </p>
+ * 
+ * 
+ * 
+ * 
+ * 
  * @author homac
  *
  */
 public class Documentation implements DocumentationProvider {
 	
-	protected JSONObject structdocs;
+	protected Map<String, StructDoc> structdocs;
 	protected String[] authors;
 
 	protected String system;
@@ -44,40 +52,51 @@ public class Documentation implements DocumentationProvider {
 	protected String version;
 	protected String source;
 	protected File includePath;
+	
+	transient final File origin;
+	
 	private boolean debug;
-
-	public Documentation (File docfile, boolean debug) throws IOException, JSONException{
+	
+	public Documentation(File docfile, boolean debug) throws IOException, JSONException{
 		this.debug = debug;
-		JSONObject docjson = new Parser(new FileInputStream(docfile)).parse();
-		
+		JSONParser parser = JSONDefaults.createDefaultParser();
+		JSONObject docjson = parser.parse(new FileInputStream(docfile));
+		origin = docfile;
 		includePath = docfile.getCanonicalFile().getParentFile();
 		system = docjson.getString("system");
 		module = docjson.getString("module");
 		version = docjson.getString("version");
 		source = docjson.getString("source");
-		JSONArray authors = (JSONArray) docjson.get("authors");
+		JSONArray authors = docjson.getArray("authors");
 		if (authors != null) {
 			this.authors = authors.toArray(new String[0]);
 		}
 		
-		structdocs = new JSONObject();
+		structdocs = new HashMap<>();
+		
+		/*
+		 * Inherits documentation of its parent.
+		 * Inherited struct documentation may be overridden by this documentation.
+		 */
 		String filename = docjson.getString("inherits");
 		if (filename != null) {
 			try {
-				structdocs = new Documentation(new File(includePath, filename), debug).structdocs;
+				Documentation parent = new Documentation(new File(includePath, filename), debug);
+				structdocs = parent.structdocs;
 			} catch (IOException | JSONException e) {
 				warn("couldn't read base documentation'" + filename + "' inherited by '" + docfile.getName() + "'.");
 				warn("reason: " + e.getMessage());
 			}
 		}
 		
-		JSONArray includeFiles = (JSONArray) docjson.get("includes");
+		JSONArray includeFiles = docjson.getArray("includes");
 		if (includeFiles != null) {
 			for (int i = 0; i < includeFiles.size(); i++) {
-				filename = (String)includeFiles.get(i);
+				filename = includeFiles.getString(i);
 				try {
-					Documentation include = new Documentation(new File(includePath, filename), debug);
-					includeStructs(include.structdocs, filename);
+					File includeFile = new File(includePath, filename);
+					Documentation include = new Documentation(includeFile, debug);
+					includeStructs(include.structdocs, includeFile);
 				} catch (IOException | JSONException e) {
 					warn("couldn't read doc file '" + filename + "' included by '" + docfile.getName() + "'.");
 					warn("reason: " + e.getMessage());
@@ -85,62 +104,60 @@ public class Documentation implements DocumentationProvider {
 			}
 		}
 		
-		JSONObject mydocs = (JSONObject) docjson.get("structs");
+		JSONObject mydocs = docjson.getObject("structs");
 		if (mydocs != null) {
-			extendStructs(mydocs, docfile.getName());
+			addNewStructs(mydocs, docfile);
 		}
 		
-		resolveInheritance();
+		resolveStructInheritance();
 	}
 
-	private void extendStructs(JSONObject extensions, String source) {
-		for (Entry<String, Object> structdocEntry : extensions.entrySet()) {
-			String structname = structdocEntry.getKey();
-			JSONObject structdoc = (JSONObject) structdocs.get(structname);
+	private void addNewStructs(JSONObject extensions, File origin) {
+		for (Entry<String, Object> structDocEntry : extensions.entrySet()) {
+			String structName = structDocEntry.getKey();
+			StructDoc newStructDoc = new StructDoc((JSONObject) structDocEntry.getValue(), origin);
+			StructDoc existingStructDoc = structdocs.get(structName);
 			
-			if (structdoc != null) {
-				overrideStructDoc(structdoc, (JSONObject)structdocEntry.getValue());
+			if (existingStructDoc != null) {
+				boolean modified = existingStructDoc.override(newStructDoc);
+				if (modified) {
+					warn("new struct overrides exsting: " + structName);
+				} else {
+					warn("duplicate definition of struct: " + structName);
+				}
 			} else {
-				structdocs.put(structname, structdocEntry.getValue());
+				structdocs.put(structName, newStructDoc);
 			}
 			
 		}
 	}
 
-	private void overrideStructDoc(JSONObject structdoc, JSONObject overrides) {
-		String doc = overrides.getString("doc");
-		if (doc != null) {
-			structdoc.put("doc", doc);
-		}
-		JSONObject fields = (JSONObject) structdoc.get("fields");
-		if (fields == null) {
-			structdoc.put("fields", overrides.get("fields"));
-		} else {
-			JSONObject overridingFields = (JSONObject) overrides.get("fields");
-			fields.putAll(overridingFields);
-		}
-		
-	}
-
-	private void includeStructs(JSONObject includes, String source) throws IOException {
-		for (Entry<String, Object> structdoc : includes.entrySet()) {
-			String structname = structdoc.getKey();
-			if (structdocs.containsKey(structname)) {
-				warn("include '" + source + "' is overriding existing entry for '" + structname + "' found in include.");
-				JSONObject ostructdoc = (JSONObject) structdocs.get(structname);
-				overrideStructDoc(ostructdoc, (JSONObject) structdoc.getValue());
+	private void includeStructs(Map<String, StructDoc> includes, File includeFile) throws IOException {
+		for (Entry<String, StructDoc> include : includes.entrySet()) {
+			String structname = include.getKey();
+			StructDoc includedStructDoc = include.getValue();
+			StructDoc existingStructDoc = structdocs.get(structname);
+			if (existingStructDoc != null) {
+				boolean modified = existingStructDoc.override(includedStructDoc);
+				if (modified) {
+					warn("include overrides '" + structname + "': " + includeFile.getName());
+				} else {
+					debug("include already merged: " + includeFile.getName());
+				}
 			} else {
-				structdocs.put(structname, structdoc.getValue());
+				structdocs.put(structname, includedStructDoc);
 			}
 			
 		}
 	}
 
 	/**
-	 * creates an empty documentation.
+	 * Creates an empty documentation.
+	 * Use it for documentation construction only such as in converters.
 	 */
 	public Documentation () {
 		structdocs = null;
+		origin = null;
 	}
 	
 
@@ -170,7 +187,7 @@ public class Documentation implements DocumentationProvider {
 	
 	public String getStructDoc(String structname) {
 		String result = null;
-		JSONObject structdoc = (JSONObject) structdocs.get(structname);
+		StructDoc structdoc = structdocs.get(structname);
 		if (structdoc != null) {
 			result = structdoc.getString("doc");
 		}
@@ -181,9 +198,9 @@ public class Documentation implements DocumentationProvider {
 		String result = null;
 		if (structdocs == null)  return result;
 		
-		JSONObject structdoc = (JSONObject) structdocs.get(structname);
+		StructDoc structdoc = structdocs.get(structname);
 		if (structdoc != null) {
-			JSONObject fieldsdoc = (JSONObject) structdoc.get("fields");
+			JSONObject fieldsdoc = structdoc.getObject("fields");
 			if (fieldsdoc != null) {
 				result = fieldsdoc.getString(fieldname);
 			}
@@ -193,25 +210,23 @@ public class Documentation implements DocumentationProvider {
 	}
 	
 
-	private void resolveInheritance() {
-		for (Entry<String, Object> doc : structdocs.entrySet()) {
-			resolveInheritance(doc.getKey());
-
+	private void resolveStructInheritance() {
+		for (Entry<String, StructDoc> doc : structdocs.entrySet()) {
+			resolveStructInheritance(doc.getKey());
 		}
 	}
 	
-	private JSONObject resolveInheritance(String structname) {
-		JSONObject structdoc = (JSONObject) structdocs.get(structname);
+	private StructDoc resolveStructInheritance(String structname) {
+		StructDoc structdoc =  structdocs.get(structname);
 		if (structdoc != null) {
-			JSONArray inherits = (JSONArray) structdoc.get("inherits");
+			JSONArray inherits = structdoc.getArray("inherits");
 			if (inherits != null) {
 				for (String base : inherits.toArray(new String[0])) {
-					JSONObject basestructdoc = resolveInheritance(base);
+					StructDoc basestructdoc = resolveStructInheritance(base);
 					if (basestructdoc != null) {
-						inheritFields(structdoc, basestructdoc);
+						structdoc.inherit(basestructdoc);
 					} else {
-						warn("could not resolve inheritance of " + base + " <-- " + structname + ".");
-						warn("reason: base class " + base + " is not defined");
+						warn("unresolved inheritance: " + base + " <-- " + structname);
 					}
 				}
 			}
@@ -219,28 +234,6 @@ public class Documentation implements DocumentationProvider {
 		return structdoc;
 	}
 
-	private void warn(String string) {
-		if (debug) {
-			System.err.println("docgen [debug]: " + string);
-		}
-	}
-
-	private void inheritFields(JSONObject structdoc, JSONObject base) {
-		JSONObject basefields = (JSONObject) base.get("fields");
-		if (basefields != null) {
-			JSONObject myfields = (JSONObject) structdoc.get("fields");
-			if (myfields == null) {
-				structdoc.put("fields", basefields);
-			} else {
-				for (Entry<String, Object> entry : basefields.entrySet()) {
-					if (!myfields.containsKey(entry.getKey())) {
-						myfields.put(entry.getKey(), entry.getValue());
-					}
-				}
-			}
-		}
-	}
-	
 	public String getPath() {
 		return includePath.toString();
 	}
@@ -252,10 +245,12 @@ public class Documentation implements DocumentationProvider {
 		root.put("module", module);
 		root.put("version", version);
 		root.put("source", source);
-		root.put("structs", structdocs);
-		FileOutputStream fout = new FileOutputStream(out);
-		fout.write(root.toString().getBytes("UTF-8"));
-		fout.close();
+		JSONObject structsjson = new JSONObject();
+		structsjson.putAll(structdocs);
+		root.put("structs", structsjson);
+		try (FileOutputStream fout = new FileOutputStream(out)) {
+			fout.write(root.toString().getBytes("UTF-8"));
+		}
 	}
 
 	public String getSource() {
@@ -272,7 +267,7 @@ public class Documentation implements DocumentationProvider {
 		File subfolder = null;
 		if (folders != null && folders.length > 0) {
 			int maxVersion = versionInfo.getVersion().getCode();
-			int minVersion = versionInfo.getMinversion();
+			int minVersion = versionInfo.getMinversion().getCode();
 			int subfolderVer = -1;
 			for (File folder : folders) {
 				try {
@@ -282,11 +277,23 @@ public class Documentation implements DocumentationProvider {
 						subfolderVer = version;
 					}
 				} catch (NumberFormatException e) {
-					System.err.println("Warning: doc folder '" + folder.getPath() + "': " + e.getMessage());
+					// not a version directory --> ignore
 				}
 			}
-		} 
+		}
 		return subfolder;
+	}
+
+	private void warn(String message) {
+		if (debug) {
+			System.err.println("docgen [debug]: " + message);
+		}
+	}
+
+	private void debug(String message) {
+		if (debug) {
+			System.err.println("docgen [debug]: " + message);
+		}
 	}
 
 

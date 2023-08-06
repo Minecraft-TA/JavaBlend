@@ -2,9 +2,11 @@ package org.cakelab.blender.doc.extract.dnadocs;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.ListIterator;
 
 import org.cakelab.blender.doc.Documentation;
+import org.cakelab.blender.doc.StructDoc;
 import org.cakelab.jdoxml.Factory;
 import org.cakelab.jdoxml.api.ICompound;
 import org.cakelab.jdoxml.api.IDocRoot;
@@ -23,8 +25,6 @@ import org.xml.sax.SAXException;
  *
  */
 public class Converter extends Documentation {
-
-	// XXX: losing notes during conversion!
 	private File input;
 	private File out;
 	private IDoxygen dox;
@@ -34,19 +34,15 @@ public class Converter extends Documentation {
 		this.input = input;
 		this.out = output;
 		
-		
-		
 		this.includePath = null;
 		this.system = "Blender";
 		this.module = "DNA";
 		this.source = "Blender Source Code";
 		this.version = version;
 
-		this.structdocs = new JSONObject();
+		this.structdocs = new HashMap<>();
 
 		dox = Factory.createObjectModel();
-
-
 	}
 
 	public void run() throws SAXException, IOException {
@@ -63,11 +59,10 @@ public class Converter extends Documentation {
 				break;
 			default:
 				break;
-			
 			}
 		}
 		
-		super.write(out);
+		write(out);
 
 		System.out.println("finished.");
 	}
@@ -78,11 +73,12 @@ public class Converter extends Documentation {
 		
 		System.out.println("processing struct " + compound.name());
 		
-		JSONObject struct = (JSONObject) structdocs.get(compound.name());
+		StructDoc struct = structdocs.get(compound.name());
 		if (struct == null) {
-			struct = new JSONObject();
+			struct = new StructDoc();
 			addStructDocs = true;
 		}
+		
 		String doc = getDoc(compound);
 		if (!doc.isEmpty()) {
 			doc = stripEmbeddedComments(doc);
@@ -102,7 +98,7 @@ public class Converter extends Documentation {
 				case Signal:
 				case Slot:
 				case DCOP:
-					// addMethodDoc(struct, member);
+					// ignore everything which is not a member variable
 					break;
 				case Variable:
 				case Property:
@@ -110,7 +106,6 @@ public class Converter extends Documentation {
 					break;
 				default:
 					break;
-				
 				}
 			}
 		}

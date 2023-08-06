@@ -6,7 +6,7 @@
 		<meta http-equiv="content-type" content="text/html; charset=utf-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
 		<meta name="author" content="Holger Machens">
-		<meta name="date" content="20-Oct-2017 16:17:48">
+		<meta name="date" content="11-Dec-2022 19:33:41">
 		<!-- meta data for search engines -->
 		<meta name="description" content="A Generic (any-version) Blender File Import/Export Toolkit for Java.">
 		<meta name="keywords" lang="en" content="Blender, Java, Import, Export">
@@ -15,8 +15,8 @@
 <body>
 <h1 style="text-align: center">Java .Blend</h1>
 <h2 style="text-align: center"><b>Documentation</b></h2>
-<p style="text-align: center">Version 1.1.1</p>
-<p style="text-align: center">20-Oct-2017</p>
+<p style="text-align: center">Version 1.3.10</p>
+<p style="text-align: center">11-Dec-2022</p>
 <p style="text-align: center">Holger Machens</p>
 
 
@@ -330,15 +330,80 @@ may or may not overlap the address range of other blocks.
 
 <h2 id="FileVersion">Blender Versioning and File Version</h2>
 <p>
-A new Blender version can contain modifications in Blender DNA, but it doesn't have to.
+Blender differentiates between Blender program version (referred to as Blender version) 
+and Blender file version. This section clarifies the meaning and relationship of both version specifiers. 
+</p>
+<p>
+On release, both types of version specifiers are comprised of three numbers which have different meanings:
+</p>
+<ul>
+<li>Major version: This number is currently, internally limited to a single digit. It changes based on 
+marketing or political decisions, which is rare for the time beeing.</li>
+<li>Minor version: This number is internally limited to two digits. Unless the major number 
+has been changed, this number counts up with every official release.</li>
+<li>Patch version: This is also referred to as <i>sub-version</i>. Once released, a given Blender version gets maintenance support. 
+This number changes when bug fixes have been incorporated. This number is abritrary long.</li>
+</ul>
+<p>
+Beyond that, there is also a version cycle specifier, which reflects different stages in the development process, such as
+<i>alpha</i>, <i>beta</i>, release candidate (<i>rc</i>) and finally <i>release</i>. 
+However, any officially released version (including patch releases) has the version cycle specifier <i>release</i>, 
+which is why it can be ignored here.
+</p>
+
+<p>
+As initially mentioned, Blender developers have decided to separate versioning of the Blender program code 
+and the Blender file format.
+</p>
+<ul>
+<li>Blender Version: The Blender program version, or Blender version for short, refers to the version of alle that code, 
+    which makes up the Blender program except of the code, which is related to the file format.</li>
+<li>Blender File Version: The Blender file version refers to the version of the file format, the data model behind it 
+(so-called DNA) and the associated code, which is responsible to read, write files and provide access to the DNA in memory, 
+inside of a running Blender program instance. So, one can think of the DNA to be a module, which is added to the program code and
+therefor has its own versioning. </li>
+</ul>
+<p>
+To keep track of the relationship between Blender version and Blender file version, both version numbers will always have the same
+major and minor number. Thus, a Blender program of version 2.91.x will always create files of file version 2.91.y, where x and y can be different. 
+</p>
+<p>
+Blender generally allows to read older version Blender files into a newer version Blender program. This requires Blender 
+to have the code to migrate the DNA stored in an older version file into a new version DNA. To some degree, Blender can also
+migrate backwards, which means that a Blender program of an older version can read a Blender file of a newer version. However, 
+this works only in a limited version range and this range is specified by two file version: The actual file version 
+and the so-called 'minimal' version. Below is the comment in the code, which states that. Blender achives that by 
+storing the actual layout of each struct and offsets of their properties in each blender file in the block DNA1.
+</p>
+
+<pre>
+/* Blender major and minor version. */
+#define BLENDER_VERSION 291
+/* Blender patch version for bugfix releases. */
+#define BLENDER_VERSION_PATCH 0
+/** Blender release cycle stage: alpha/beta/rc/release. */
+#define BLENDER_VERSION_CYCLE release
+
+/* Blender file format version. */
+#define BLENDER_FILE_VERSION BLENDER_VERSION
+#define BLENDER_FILE_SUBVERSION 10
+
+/* Minimum Blender version that supports reading file written with the current
+ * version. Older Blender versions will test this and show a warning if the file
+ * was written with too new a version. */
+#define BLENDER_FILE_MIN_VERSION 290
+#define BLENDER_FILE_MIN_SUBVERSION 0
+</pre>
+
+<p>
 The version specifier given in the file header of a Blender file always refers to the
-version of the Blender instance, which created the file. Besides this information, a Blender
+version of the Blender program instance, which created the file. Besides this information, a Blender
 file contains a block called <code>GLOB</code>, which contains more detailed information 
 in respect to DNA model compatibility, based on additional version specifiers.
 This block contains the struct <code>FileGlobal</code>.
 </p>
 <p>
-A full version check in Blender considers theses four version specifiers:
+A full version check in Blender considers these four version specifiers:
 </p>
 <dl>
 <dt>VERSION (file header)</dt>
@@ -371,7 +436,9 @@ can change and even the semantic of data can change. Thus, reading a file of one
 which is considered compatible, but not of the same version as the current DNA, is subject to
 several conversion procedures before it is available to the system. Those conversion procedures
 can be found in blenders source code in files 
-<code>source/blender/blenloader/intern/versioning_*.c</code>. 
+<code>source/blender/blenloader/intern/versioning_*.c</code>. Java .Blend does not implement these
+conversion function, and instead expects the user to use an exact matching library version for 
+their Blender version.
 </p>
 
 <h2 id="BlockOrder">Block Order</h2>
@@ -895,7 +962,7 @@ documentation.
 </p>
 <p>
 <em>
-Please note that the externally maintained documentation is kept in a <a href="https://github.com/homacs/JavaBlendDocs.git">separate 
+Please note that the DNA documentation is kept in a <a href="https://github.com/homacs/org.cakelab.blender.dnadoc.git">
 repository on github</a> and published under 
 GPL v3 (see Section <a href="index.html#Licensing">'Licensing'</a> on the main page for reasons).
 </em>
@@ -918,13 +985,14 @@ Documenation files are written in JSON and contain Javadoc comments. The followi
 </p>
 <table border="1">
 <tr><th>key</th><th>value</th><th>type</th><th>description</th></tr>
-<tr><td><b>system</b></td><td>"Blender"</td><td>String</td><td>Always "Blender".</td></tr>
-<tr><td><b>module</b></td><td>"DNA"</td><td>String</td><td>Always "DNA".</td></tr>
-<tr><td><b>version</b></td><td>major.minor</td><td>String</td><td>Version string as retrieved from file header (e.g. "2.69")</td></tr>
-<tr><td><b>source</b></td><td>source of information</td><td>String</td><td>String which specifies where this information was gathered from (e.g. Python API, Blender Source Code, etc.)</td></tr>
-<tr><td>includes</td><td>list of files to be included</td><td>Array of Strings</td><td>List of paths to files to be included in this documentation file.</td></tr>
-<tr><td>doc</td><td>(reserved for javadoc package info)</td><td>String</td><td>Place for package documentation which is not used in the current version.</td></tr>
-<tr><td>structs</td><td>list of structs</td><td>Array of JSON objects</td><td>List of structs with documentation.
+<tr><th>system</th><td>"Blender"</td><td>String</td><td>Always "Blender".</td></tr>
+<tr><th>module</th><td>"DNA"</td><td>String</td><td>Always "DNA".</td></tr>
+<tr><th>version</th><td>major.minor</td><td>String</td><td>Version string as retrieved from file header (e.g. "2.69")</td></tr>
+<tr><th><b>source</th><td>source of information</td><td>String</td><td>String which specifies where this information was gathered from (e.g. Python API, Blender Source Code, etc.)</td></tr>
+<tr><th>inherits</th><td>list of doc files to be inherited</td><td>Array of Strings</td><td>List of paths to doc files to be referred to, in case no other documentation was found for a given subject (e.g. struct). Inherited documentation will be overridden by included documentation or documentation found in the given doc file.</td></tr>
+<tr><th>includes</th><td>list of files to be included</td><td>Array of Strings</td><td>List of paths to doc files to be included in this documentation file. This will override previously inherited or included documentation.</td></tr>
+<tr><th>doc</th><td>Reserved for javadoc package info (e.g. package.html)</td><td>String</td><td>Place for package documentation which is not used in the current version.</td></tr>
+<tr><th>structs</th><td>list of structs</td><td>Array of JSON objects</td><td>List of structs with documentation.
 	<table border="1">
 	<tr><th>key</th><th>value</th><th>type</th><th>description</th></tr>
 	<tr><td><em>struct name</em></td><td>javadocs for a struct</td><td>JSON object</td><td>Contains javadoc for the corresponding class and its members.
@@ -1098,10 +1166,9 @@ amount of work power, trying to find knowledge over and over again,
 someone else already figured out! Just do the math.
 </p>
 <p>
-The externally maintained documentation is kept in a separate 
-repository on github. Its URL is:
+The DNA documentation is also available on github. Its URL is:
 </p>
-<p><a href="https://github.com/homacs/JavaBlendDocs.git"><code>https://github.com/homacs/JavaBlendDocs.git</code></a><p>
+<p><a href="https://github.com/homacs/org.cakelab.blender.dnadoc.git"><code>https://github.com/homacs/org.cakelab.blender.dnadoc.git</code></a><p>
 <p>
 To contribute to the documentation just fork it on github, and send me a 
 pull request with your modifications. Contributions are reviewed and 

@@ -23,7 +23,7 @@ allprojects {
 
     dependencies {
         compile 'com.github.ReplayMod:jdoxml:bf3a047'
-        compile 'com.github.ReplayMod:org.cakelab.json:dc46f55'
+        compile 'com.github.Minecraft-TA:org.cakelab.json:e89615a'
     }
 }
 

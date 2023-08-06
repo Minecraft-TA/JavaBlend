@@ -7,18 +7,21 @@ import java.io.IOException;
 import java.io.PrintStream;
 
 import org.cakelab.blender.doc.DocumentationProvider;
-import org.cakelab.blender.generator.typemap.Renaming;
 import org.cakelab.blender.generator.utils.ClassGenerator;
 import org.cakelab.blender.generator.utils.GComment;
 import org.cakelab.blender.generator.utils.GComment.Type;
 import org.cakelab.blender.generator.utils.GField;
+import org.cakelab.blender.generator.utils.GJavaDoc;
 import org.cakelab.blender.generator.utils.GMethod;
 import org.cakelab.blender.generator.utils.GPackage;
 import org.cakelab.blender.io.BlenderFile;
+import org.cakelab.blender.io.FileHeader.Version;
 import org.cakelab.blender.io.FileVersionInfo;
 import org.cakelab.blender.metac.CStruct;
 import org.cakelab.blender.nio.CFacade;
 import org.cakelab.blender.nio.CPointer;
+import org.cakelab.blender.typemap.CFacadeMembers;
+import org.cakelab.blender.typemap.NameMapping;
 import org.cakelab.blender.utils.MainLibBase;
 
 public class MainLibClassGenerator extends ClassGenerator {
@@ -28,7 +31,7 @@ public class MainLibClassGenerator extends ClassGenerator {
 	private static final String MEMBER_doVersionCheck = "doVersionCheck";
 	private static final String MEMBER_doCompatibilityCheck = "doCompatibilityCheck";
 	
-	private GComment comment;
+	private GJavaDoc comment;
 	private GPackage dnaPackage;
 
 
@@ -44,7 +47,7 @@ public class MainLibClassGenerator extends ClassGenerator {
 		addImport(IOException.class);
 		addImport(FileVersionInfo.class);
 		
-		comment = new GComment(GComment.Type.JavaDoc);
+		comment = new GJavaDoc(this);
 		comment.appendln();
 		comment.appendln("Generated class " + CLASSNAME + " derived from blenders BKE_main.h");
 		comment.appendln();
@@ -59,7 +62,7 @@ public class MainLibClassGenerator extends ClassGenerator {
 				+ "them to the appropriate members of the main lib (represented by this class).\n"
 				+ "</p>\n<p>"
 				+ "This class is also vital to check whether a given blender file is compatible\n"
-				+ "with the data model associated with this Main lib class (see {@link #"+ MEMBER_doVersionCheck + "} and {@link #get" + MEMBER_fileGlobal + ")."
+				+ "with the data model associated with this Main lib class (see {@link #"+ MEMBER_doVersionCheck + "(FileVersionInfo)} and {@link #" + toGetterMethodName(MEMBER_fileGlobal) + "()})."
 						+ "</p>"
 				+ "@author homac");
 
@@ -90,7 +93,7 @@ public class MainLibClassGenerator extends ClassGenerator {
 
 		 */
 		
-		GComment comment = new GComment(GComment.Type.JavaDoc);
+		GJavaDoc comment = new GJavaDoc(this);
 		comment.appendln("returns the first library element in the list of ids which the given libElem is a part of.");
 		
 		GMethod method = new GMethod(0);
@@ -108,7 +111,7 @@ public class MainLibClassGenerator extends ClassGenerator {
 	}
 
 	private void addVersionCheckMethod() {
-		GComment comment = new GComment(GComment.Type.JavaDoc);
+		GJavaDoc comment = new GJavaDoc(this);
 		comment.appendln("\n");
 		comment.appendln("This method checks whether the given file is of the same version");
 		comment.appendln("as the generated data model.");
@@ -127,23 +130,25 @@ public class MainLibClassGenerator extends ClassGenerator {
 	}
 
 	private void addCompatibilityCheckMethod() {
-		GComment comment = new GComment(GComment.Type.JavaDoc);
+		GJavaDoc comment = new GJavaDoc(this);
 		comment.appendln("\n");
-		comment.appendln("This method checks whether the given file contains data that can be converted");
-		comment.appendln("into the generated data model. This means, that the data model contains all");
-		comment.appendln("required structs and structs have all required member variables to");
-		comment.appendln("hold all information given in the file but it has to be converted.");
+		comment.appendln("This method checks, whether the given blender file complies to the file version range ");
+		comment.appendln("(see e.g. #BLENDER_VERSION and #BLENDER_MINVERSION) that could in principle be supported ");
+		comment.appendln("by the data model. That means, required structs may exist but the content may have to be ");
+		comment.appendln("converted, which is generally not supported by the library.");
 		comment.appendln("");
-		comment.appendln("<em>Please note that conversion requires to take into account all semantic ");
-		comment.appendln("reinterpretation to be found in Blender's source code in files ");
-		comment.appendln("<code>source/blender/blenloader/intern/versioning_*.c</code>. Thus, it is ");
-		comment.appendln("not enough to just apply type conversions on raw data.</em>");
+		comment.appendln("<em>Unless you have added methods to convert the data, you should convert the file with. ");
+		comment.appendln("blender before reading it.</em> Conversion code can be found in Blender's source code in files ");
+		comment.appendln("<code>source/blender/blenloader/intern/versioning_*.c</code>. These functions ");
+		comment.appendln("are not implemeted in Java .Blend.");
 		comment.appendln();
 		comment.appendln("You can get file version info from {@link BlenderFile#readFileGlobal}.");
+		comment.addSeeTag("#getFileGlobal()");
+		comment.addSeeTag("#doVersionCheck(FileVersionInfo)");
 		
 		GMethod method = new GMethod(0);
 		method.setComment(comment);
-		method.appendln("public static boolean "+ MEMBER_doCompatibilityCheck + "(FileVersionInfo fileVersionInfo) throws IOException {");
+		method.appendln("public static boolean " + MEMBER_doCompatibilityCheck + "(FileVersionInfo fileVersionInfo) throws IOException {");
 		method.indent(+1);
 		method.appendln("int version = fileVersionInfo.getVersion().getCode();");
 		method.appendln("int subversion = fileVersionInfo.getSubversion();");
@@ -164,29 +169,51 @@ public class MainLibClassGenerator extends ClassGenerator {
 
 
 	private void addVersionSpecifiers(FileVersionInfo versionInfo) {
-		GComment comment = new GComment(GComment.Type.JavaDoc);
+		GJavaDoc comment = new GJavaDoc(this);
 		comment.appendln();
-		comment.appendln("This is the version of blender, the data model was generated from.");
-		comment.appendln("Implicitly, it is the maximum version the generated import code can understand.");
+		comment.appendln("This is the version of blender, the data model was generated from. It's also called Blender file version and is usually equivalent to the versino of the Blender program.");
+		comment.appendln("Implicitly, it is the maximum file version the generated import code can understand.");
 		addConstField("public static final", "short", "BLENDER_VERSION", Integer.toString(versionInfo.getVersion().getCode()), comment);
 
-		comment = new GComment(GComment.Type.JavaDoc);
+		comment = new GJavaDoc(this);
 		comment.appendln();
-		comment.appendln("This is the subversion of blender, the data model was generated from.");
-		comment.appendln("Implicitly, it is the maximum subversion the generated import code can understand.");
+		comment.appendln("This is the subversion of blender, the data model was generated from. It's also called Blender file sub-version, which can differ from the patch-level of the Blender program.");
+		comment.appendln("Implicitly, it is the maximum file sub-version the generated import code can understand.");
 		addConstField("public static final", "short", "BLENDER_SUBVERSION", Integer.toString(versionInfo.getSubversion()), comment);
 
-		comment = new GComment(GComment.Type.JavaDoc);
+		comment = new GJavaDoc(this);
 		comment.appendln();
-		comment.appendln("This is the minimal version of blender, the generated data model corresponds to.");
+		comment.appendln("This is the minimal Blender file version, the generated data model corresponds to.");
 		comment.appendln("Every file with a version lower than this needs conversion.");
-		addConstField("public static final", "short", "BLENDER_MINVERSION", Integer.toString(versionInfo.getMinversion()), comment);
+		comment.addSeeTag("#BLENDER_VERSION");
+		addConstField("public static final", "short", "BLENDER_MINVERSION", Integer.toString(versionInfo.getMinversion().getCode()), comment);
 
-		comment = new GComment(GComment.Type.JavaDoc);
+		comment = new GJavaDoc(this);
 		comment.appendln();
-		comment.appendln("This is the minimal version of blender, the generated data model corresponds to.");
+		comment.appendln("This is the minimal Blender file sub-version, the generated data model corresponds to.");
 		comment.appendln("Every file with a version lower than this needs conversion.");
+		comment.addSeeTag("#BLENDER_SUBVERSION");
 		addConstField("public static final", "short", "BLENDER_MINSUBVERSION", Integer.toString(versionInfo.getMinsubversion()), comment);
+
+		Version VERSION = versionInfo.getVersion();
+		int SUBVERSION = versionInfo.getSubversion();
+		Version MINVERSION = versionInfo.getMinversion();
+		int MINSUBVERSION = versionInfo.getMinsubversion();
+		
+		comment = new GJavaDoc(this);
+		comment.appendln();
+		comment.appendln("#BLENDER_VERSION and _SUBVERSION as a String.");
+		comment.addSeeTag("#BLENDER_VERSION");
+		comment.addSeeTag("#BLENDER_SUBVERSION");
+		addConstField("public static final", "String", "BLENDER_VERSION_STRING", "\"" + VERSION + "." + SUBVERSION + "\"", comment);
+
+		comment = new GJavaDoc(this);
+		comment.appendln();
+		comment.appendln("#BLENDER_MINVERSION and _MINSUBVERSION as a String.");
+		comment.addSeeTag("#BLENDER_MINVERSION");
+		comment.addSeeTag("#BLENDER_MINSUBVERSION");
+		addConstField("public static final", "String", "BLENDER_MINVERSION_STRING", "\"" + MINVERSION + "." + MINSUBVERSION + "\"", comment);
+	
 	}
 
 
@@ -195,7 +222,7 @@ public class MainLibClassGenerator extends ClassGenerator {
 
 	public void visit(CStruct struct) throws FileNotFoundException {
 		if (MainLibBase.isLibraryElement(struct)) {
-			String classname = Renaming.mapStruct2Class(struct.getSignature());
+			String classname = NameMapping.mapStruct2Class(struct.getSignature());
 			GComment comment = new GComment(Type.JavaDoc);
 			comment.appendln();
 			comment.appendln("See {@link " + classname + "} for documentation.");
@@ -294,7 +321,7 @@ public class MainLibClassGenerator extends ClassGenerator {
 
 	public GField addField(String modifiers, String type, String name,
 			String comment) {
-		GComment gcomment = new GComment(GComment.Type.JavaDoc);
+		GJavaDoc gcomment = new GJavaDoc(this);
 		gcomment.appendln(comment);
 		return addField(modifiers, type, name, gcomment);
 	}
@@ -305,7 +332,5 @@ public class MainLibClassGenerator extends ClassGenerator {
 	public String getClassName() {
 		return CLASSNAME;
 	}
-
-
 
 }
